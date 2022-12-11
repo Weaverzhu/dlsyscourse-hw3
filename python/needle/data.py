@@ -10,7 +10,7 @@ class Transform:
 
 
 class RandomFlipHorizontal(Transform):
-    def __init__(self, p=0.5):
+    def __init__(self, p = 0.5):
         self.p = p
 
     def __call__(self, img):
@@ -24,7 +24,10 @@ class RandomFlipHorizontal(Transform):
         """
         flip_img = np.random.rand() < self.p
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if flip_img:
+            return np.flip(img, axis=(1,))
+        else:
+            return img
         ### END YOUR SOLUTION
 
 
@@ -33,18 +36,22 @@ class RandomCrop(Transform):
         self.padding = padding
 
     def __call__(self, img):
-        """Zero pad and then randomly crop an image.
+        """ Zero pad and then randomly crop an image.
         Args:
              img: H x W x C NDArray of an image
-        Return
+        Return 
             H x W x C NAArray of cliped image
         Note: generate the image shifted by shift_x, shift_y specified below
         """
-        shift_x, shift_y = np.random.randint(
-            low=-self.padding, high=self.padding + 1, size=2
-        )
+        shift_x, shift_y = np.random.randint(low=-self.padding, high=self.padding+1, size=2)
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        padding = ((self.padding, self.padding), (self.padding, self.padding), (0,0))
+        img_padded = np.pad(img, padding, 'constant', constant_values=0)
+        x_from = self.padding + shift_x
+        x_to = x_from + img.shape[0]
+        y_from = self.padding + shift_y
+        y_to = y_from + img.shape[1]
+        return img_padded[x_from:x_to, y_from:y_to, :]
         ### END YOUR SOLUTION
 
 
@@ -83,7 +90,7 @@ class DataLoader:
             (default: ``1``).
         shuffle (bool, optional): set to ``True`` to have the data reshuffled
             at every epoch (default: ``False``).
-    """
+     """
     dataset: Dataset
     batch_size: Optional[int]
 
@@ -98,19 +105,30 @@ class DataLoader:
         self.shuffle = shuffle
         self.batch_size = batch_size
         if not self.shuffle:
-            self.ordering = np.array_split(
-                np.arange(len(dataset)), range(batch_size, len(dataset), batch_size)
-            )
+            self.ordering = np.array_split(np.arange(len(dataset)), 
+                                           range(batch_size, len(dataset), batch_size))
 
     def __iter__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.batch_idx = 0
+        if self.shuffle:
+            ordering = np.arange(len(self.dataset))
+            np.random.shuffle(ordering)
+            batch_ranges = range(self.batch_size, len(self.dataset), self.batch_size)
+            self.ordering = np.array_split(ordering, batch_ranges)
         ### END YOUR SOLUTION
         return self
 
     def __next__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.batch_idx < len(self.ordering):
+            idx = self.ordering[self.batch_idx]
+            self.batch_idx += 1
+            result = self.dataset[idx]
+            result = tuple([Tensor(x) for x in result])
+            return result
+        else:
+            raise StopIteration
         ### END YOUR SOLUTION
 
 
@@ -122,17 +140,44 @@ class MNISTDataset(Dataset):
         transforms: Optional[List] = None,
     ):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        super().__init__(transforms)
+        import gzip, struct
+        with gzip.open(image_filename, 'rb') as f:
+            magic, size, nrows, ncols = struct.unpack(">IIII", f.read(16))
+            image_data = np.frombuffer(f.read(),
+                                    dtype=np.dtype(np.uint8).newbyteorder('>'))
+            image_data = image_data.reshape((size, nrows, ncols))
+
+        image_data = image_data.reshape(size, -1).astype(np.float32)
+        image_data = (image_data - image_data.min()) / (image_data.max() -
+                                                        image_data.min())
+
+        with gzip.open(label_filename, 'rb') as f:
+            magic, nlabels = struct.unpack(">II", f.read(8))
+            label_data = np.frombuffer(f.read(),
+                                    dtype=np.dtype(np.uint8).newbyteorder('>'))
+        self.X = image_data
+        self.y = label_data
         ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        X = self.X[index]
+        y = self.y[index]
+        if isinstance(index, (slice, np.ndarray)):
+            y = np.reshape(y, y.shape[0])
+            X = np.reshape(X, (X.shape[0], 28, 28, 1))
+            for idx, x in enumerate(X):
+                X[idx] = self.apply_transforms(x)
+        else:
+            X = np.reshape(X, (28, 28, 1))
+            X = self.apply_transforms(X)
+        return (X, y)
         ### END YOUR SOLUTION
 
     def __len__(self) -> int:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return len(self.X)
         ### END YOUR SOLUTION
 
 
